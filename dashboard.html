@@ -1,0 +1,151 @@
+
+<!DOCTYPE html>
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Reader Applicaion</title>
+
+
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.0.0-rc13.min.js"></script>
+    <script src="./js/lodash.compat.min.js"></script>
+    <script src="./js/d3.min.js"></script>
+    <script src="./js/nv.d3.min.js"></script>
+
+    <link rel="stylesheet" href="./css/nv.d3.css">
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css">
+    <!-- Optional Bootstrap theme -->
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap-theme.min.css">
+    <style>
+        body {
+          overflow-y:scroll;
+        }
+
+        .barChart {
+          width: 1180px;
+          height: 500px;
+          border: 1px;
+        }
+        .header {
+            border-bottom: 1px solid #ccc;
+            margin-bottom: 16px;
+        }
+    </style>
+<style id="clearly_highlighting_css" type="text/css">/* selection */ html.clearly_highlighting_enabled ::-moz-selection { background: rgba(246, 238, 150, 0.99); } html.clearly_highlighting_enabled ::selection { background: rgba(246, 238, 150, 0.99); } /* cursor */ html.clearly_highlighting_enabled {    /* cursor and hot-spot position -- requires a default cursor, after the URL one */    cursor: url("chrome-extension://pioclpoplcdbaefihamjohnefbikjilc/clearly/images/highlight--cursor.png") 14 16, text; } /* highlight tag */ em.clearly_highlight_element {    font-style: inherit !important; font-weight: inherit !important;    background-image: url("chrome-extension://pioclpoplcdbaefihamjohnefbikjilc/clearly/images/highlight--yellow.png");    background-repeat: repeat-x; background-position: top left; background-size: 100% 100%; } /* the delete-buttons are positioned relative to this */ em.clearly_highlight_element.clearly_highlight_first { position: relative; } /* delete buttons */ em.clearly_highlight_element a.clearly_highlight_delete_element {    display: none; cursor: pointer;    padding: 0; margin: 0; line-height: 0;    position: absolute; width: 34px; height: 34px; left: -17px; top: -17px;    background-image: url("chrome-extension://pioclpoplcdbaefihamjohnefbikjilc/clearly/images/highlight--delete-sprite.png"); background-repeat: no-repeat; background-position: 0px 0px; } em.clearly_highlight_element a.clearly_highlight_delete_element:hover { background-position: -34px 0px; } /* retina */ @media (min--moz-device-pixel-ratio: 2), (-webkit-min-device-pixel-ratio: 2), (min-device-pixel-ratio: 2) {    em.clearly_highlight_element { background-image: url("chrome-extension://pioclpoplcdbaefihamjohnefbikjilc/clearly/images/highlight--yellow@2x.png"); }    em.clearly_highlight_element a.clearly_highlight_delete_element { background-image: url("chrome-extension://pioclpoplcdbaefihamjohnefbikjilc/clearly/images/highlight--delete-sprite@2x.png"); background-size: 68px 34px; } } </style><style>[touch-action="none"]{ -ms-touch-action: none; touch-action: none; }[touch-action="pan-x"]{ -ms-touch-action: pan-x; touch-action: pan-x; }[touch-action="pan-y"]{ -ms-touch-action: pan-y; touch-action: pan-y; }[touch-action="scroll"],[touch-action="pan-x pan-y"],[touch-action="pan-y pan-x"]{ -ms-touch-action: pan-x pan-y; touch-action: pan-x pan-y; }</style></head>
+<body>
+    <div id="amazon-root"><script type="text/javascript" async="" id="amazon-login-sdk" src="./js/login1.js"></script></div>
+
+    <div class="container header">
+    <h1>Real-time Dashboard <small>Reader (<a href="./image/DemoImage.png">demo image</a>)</small> </h1>
+    </div>
+
+    <div class="container">
+        <div id="login">
+            <div class="jumbotron">
+        <h1>Sample Reader Application</h1>
+        <p><br /></p>
+        <p>Login with your Amazon.com credentials. (Details -> <a href='http://login.amazon.com/'>http://login.amazon.com/</a>)</p>
+                <p><a class="btn btn-primary btn-lg" role="button" id="LoginWithAmazon">Show Keywords</a></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="row">
+            <div id="chart" class="col-lg-6 text-center">
+                <svg id="chart" class="barChart"></svg>
+            </div>
+            <div class="col-lg-6">
+                <div id="logout"></div>
+            </div>
+    </div>
+
+    <script type="text/javascript">
+    var chartData = new Array(),
+        duration = 350;
+
+    // Login with Amazon
+
+    function drawChart(d3Data) {
+        nv.addGraph(function() {
+            chart = nv.models.discreteBarChart()
+                .x(function(d) { return d.label })
+                .y(function(d) { return d.value })
+                .staggerLabels(true)
+        .tooltips(false)
+        .showValues(true)
+                ;
+            d3.select("#chart svg")
+                .datum(d3Data)
+                .call(chart);
+            nv.utils.windowResize(chart.update);
+        });
+
+    }
+
+    // var aws = require('aws-sdk');
+    function showCharts() {
+        var ddb = new AWS.DynamoDB({
+            region: 'us-east-1',
+            accessKeyId: 'ACCESS_KEY',
+            secretAccessKey: 'SECRET_KEY'
+        });
+        var params = {
+          TableName: 'Documents',
+          Key: {
+            'path': {S: 'reader/input/'},
+            'filename': {S: 'ecs1.txt'}
+          }
+        };
+
+        ddb.getItem(params, function(err, data) {
+          if (err)
+            console.log(err);
+          else {
+            // console.log(data);
+            scores = data.Item.score.S;
+            scores = scores.split(',');
+            // scores = data.Item.score;
+            console.log(scores);
+
+            var d3Data = new Array();
+            scores.forEach(function(termScore) {
+                arrData=termScore.split(":");
+                d3Data.push({
+                    "label": arrData[0],
+                    "value": parseFloat(arrData[1])
+                });
+            });
+
+          var inData = {};
+          var finalData = new Array();
+
+            inData.key = "Cumulative Return";
+            inData.values = d3Data;
+            finalData[0] = inData;
+            drawChart(finalData);
+
+          }
+        });
+    }
+
+
+    document.getElementById('LoginWithAmazon').onclick = function() {
+        // options = { scope : 'profile' };
+        // amazon.Login.authorize(options, amazonAuth);
+        // document.getElementById('logout').innerHTML = '<button type="button" class="btn btn-danger">Logout</button>';
+        showCharts();
+    };
+
+    document.getElementById('logout').onclick = function() {
+        amazon.Login.logout();
+        location.reload();
+    };
+
+
+    </script>
+
+    <script src="./js/jquery.js"></script>
+    <script src="./js/bootstrap.min.js"></script>
+</div></body></html>
